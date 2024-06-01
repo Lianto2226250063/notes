@@ -1,10 +1,11 @@
-import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:notes/models/note.dart';
-import 'package:notes/services/note_service.dart';
+import 'package:notes/services/notes_services.dart';
+
+import '../services/location_services_dart';
 
 class NoteDialog extends StatefulWidget {
   final Note? note;
@@ -19,6 +20,8 @@ class _NoteDialogState extends State<NoteDialog> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   File? _imageFile;
+  Position? _currentPosition;
+  // String? _currentAddress;
 
   @override
   void initState() {
@@ -39,6 +42,16 @@ class _NoteDialogState extends State<NoteDialog> {
     }
   }
 
+  Future<void> _pickLocation() async {
+    final currentPosition = await LocationService.getCurrentPosition();
+    // final currentAddress = await LocationService.getAddressFromLatLng(_currentPosition!);
+    setState(() {
+      _currentPosition = currentPosition;
+      // _currentAddress = currentAddress;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.note == null ? 'Add Notes' : 'Update Notes'),
@@ -66,23 +79,23 @@ class _NoteDialogState extends State<NoteDialog> {
             child: Text('Image: '),
           ),
           Expanded(
-            child: _imageFile != null
-                ? Image.file(
-                    _imageFile!,
-                    fit: BoxFit.cover,
-                  )
-                : (widget.note?.imageUrl != null &&
-                        Uri.parse(widget.note!.imageUrl!).isAbsolute)
-                    ? Image.network(
-                        widget.note!.imageUrl!,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(),
-          ),
+              child: _imageFile != null
+                  ? Image.file(_imageFile!, fit: BoxFit.cover)
+                  : (widget.note?.imageUrl != null &&
+                        Uri.parse(widget.note!.imageUrl!).isAbsolute
+                      ? Image.network(widget.note!.imageUrl!, fit: BoxFit.cover)
+                      : Container())),
           TextButton(
             onPressed: _pickImage,
             child: const Text('Pick Image'),
-          )
+          ),
+          TextButton(
+            onPressed: _pickLocation,
+            child: const Text('Get Current Location'),
+          ),
+          Text('LAT: ${_currentPosition?.latitude ?? ""}'),
+          Text('LNG: ${_currentPosition?.longitude ?? ""}'),
+          // Text('ADDRESS: ${_currentAddress ?? ""}'),
         ],
       ),
       actions: [
@@ -99,15 +112,20 @@ class _NoteDialogState extends State<NoteDialog> {
           onPressed: () async {
             String? imageUrl;
             if (_imageFile != null) {
-              imageUrl = await NoteService.uploadImage(_imageFile!);
+              imageUrl = await NoteService.uploadImage(_imageFile! );
+            } else {
+              imageUrl = widget.note?.imageUrl;
             }
-
             Note note = Note(
+              id: widget.note?.id,
               title: _titleController.text,
               description: _descriptionController.text,
               imageUrl: imageUrl,
+              latitude: _currentPosition?.latitude,
+              longitude: _currentPosition?.longitude,
               createdAt: widget.note?.createdAt,
             );
+
             if (widget.note == null) {
               NoteService.addNote(note)
                   .whenComplete(() => Navigator.of(context).pop());
